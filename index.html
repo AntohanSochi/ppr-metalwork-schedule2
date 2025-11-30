@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ППР График производства металлоконструкций</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .gradient-header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%); }
+        .card-shadow { box-shadow: 0 4px 15px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08); }
+        .stage-prep { background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-left: 4px solid #0284c7; }
+        .stage-assembly { background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%); border-left: 4px solid #ca8a04; }
+        .stage-output { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-left: 4px solid #16a34a; }
+        .status-ok { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
+        .status-over { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .status-under { background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); }
+        .progress-bar { transition: width 0.5s ease-out; }
+        .day-row:hover { transform: translateX(5px); transition: all 0.3s ease; }
+        @media (max-width: 768px) {
+            .day-row:hover { transform: none; }
+        }
+        .item-tag { 
+            display: inline-block; 
+            padding: 2px 8px; 
+            margin: 2px; 
+            border-radius: 12px; 
+            font-size: 11px;
+            font-weight: 500;
+            background: rgba(255,255,255,0.7);
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        @media (max-width: 640px) {
+            .item-tag { 
+                padding: 1px 6px; 
+                font-size: 10px;
+                margin: 1px;
+            }
+        }
+        .item-column { background: #f8f9fa; }
+        .item-beam { background: #e3f2fd; }
+        .item-link { background: #fff3e0; }
+        .item-frame { background: #f3e5f5; }
+        .item-strut { background: #e8f5e9; }
+        .item-spacer { background: #fce4ec; }
+        .tooltip { position: relative; }
+        .tooltip:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 100;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-row { animation: fadeIn 0.4s ease-out forwards; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-header text-white py-6 px-4 shadow-lg">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-3">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                        Производственный график (ППР)
+                    </h1>
+                    <p class="text-blue-200 mt-1">Изготовление металлоконструкций</p>
+                </div>
+                <div class="bg-white/20 backdrop-blur rounded-lg px-5 py-3">
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm md:text-base">
+                        <span><b>Вес общий:</b> <span id="totalWeight">~144,6</span> тонн</span>
+                        <span class="hidden md:inline text-blue-300">|</span>
+                        <span><b>Количество марок:</b> <span id="totalMarks">~118</span> шт</span>
+                        <span class="hidden md:inline text-blue-300">|</span>
+                        <span><b>Количество деталей:</b> <span id="totalItems">~734</span> шт</span>
+                        <span class="hidden md:inline text-blue-300">|</span>
+                        <span><b>План:</b> 6.0 - 6.3 т/смена <span id="totalDays">25</span> дней</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Progress Section -->
+    <div class="max-w-7xl mx-auto px-4 py-4">
+        <div class="bg-white rounded-xl card-shadow p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-gray-600">Общий прогресс производства</span>
+                <span class="text-sm font-bold text-blue-600" id="progressPercent">0%</span>
+            </div>
+            <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div id="progressBar" class="h-full progress-bar rounded-full bg-gradient-to-r from-blue-500 via-green-500 to-emerald-500" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between mt-2 text-xs text-gray-500">
+                <span id="startDateLabel">Начало: --</span>
+                <span id="endDateLabel">Завершение: --</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="max-w-7xl mx-auto px-4 py-2">
+        <div class="bg-white rounded-xl card-shadow p-3 md:p-4">
+            <div class="flex flex-wrap gap-2 md:gap-4 items-center justify-center">
+                <div class="flex items-center gap-1 md:gap-2">
+                    <div class="w-3 h-3 md:w-4 md:h-4 rounded stage-prep"></div>
+                    <span class="text-xs md:text-sm text-gray-600">Заготовка</span>
+                </div>
+                <div class="flex items-center gap-1 md:gap-2">
+                    <div class="w-3 h-3 md:w-4 md:h-4 rounded stage-assembly"></div>
+                    <span class="text-xs md:text-sm text-gray-600">Сборка</span>
+                </div>
+                <div class="flex items-center gap-1 md:gap-2">
+                    <div class="w-3 h-3 md:w-4 md:h-4 rounded stage-output"></div>
+                    <span class="text-xs md:text-sm text-gray-600">Выпуск</span>
+                </div>
+                <div class="hidden sm:block border-l"></div>
+                <div class="w-full sm:w-auto flex justify-center gap-2 md:gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 sm:pl-2 md:pl-4">
+                    <div class="flex items-center gap-1">
+                        <div class="w-2 h-2 md:w-3 md:h-3 rounded-full status-ok"></div>
+                        <span class="text-xs text-gray-500">Норма</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-2 h-2 md:w-3 md:h-3 rounded-full status-under"></div>
+                        <span class="text-xs text-gray-500">Недогруз</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-2 h-2 md:w-3 md:h-3 rounded-full status-over"></div>
+                        <span class="text-xs text-gray-500">Превыш.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="max-w-7xl mx-auto px-4 py-3">
+        <div class="bg-white rounded-xl card-shadow p-3 md:p-4">
+            <div class="grid grid-cols-2 md:flex md:flex-wrap gap-3 md:gap-4 items-end">
+                <div class="col-span-1">
+                    <label class="text-xs md:text-sm text-gray-600 block mb-1">📅 Дата начала:</label>
+                    <input type="date" id="startDateInput" value="2025-11-27" 
+                        class="w-full border rounded-lg px-2 md:px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer">
+                </div>
+                <div class="col-span-1">
+                    <label class="text-xs md:text-sm text-gray-600 block mb-1">🔍 Поиск марки:</label>
+                    <input type="text" id="searchInput" placeholder="К1-2" 
+                        class="w-full border rounded-lg px-2 md:px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="col-span-1">
+                    <label class="text-xs md:text-sm text-gray-600 block mb-1">📦 Тип:</label>
+                    <select id="filterType" class="w-full border rounded-lg px-2 md:px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="">Все</option>
+                        <option value="Колонна">Колонны</option>
+                        <option value="Балка">Балки</option>
+                        <option value="Связь">Связи</option>
+                        <option value="Фахверк">Фахверк</option>
+                        <option value="Стойка">Стойки</option>
+                        <option value="Распорка">Распорки</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label class="text-xs md:text-sm text-gray-600 block mb-1">👁 Вид:</label>
+                    <div class="flex gap-1 md:gap-2">
+                        <button id="viewCalendar" class="flex-1 md:flex-none px-2 md:px-3 py-2 bg-blue-600 text-white rounded-lg text-xs md:text-sm font-medium">
+                            📅 <span class="hidden sm:inline">Календарь</span>
+                        </button>
+                        <button id="viewTable" class="flex-1 md:flex-none px-2 md:px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs md:text-sm font-medium hover:bg-gray-300">
+                            📋 <span class="hidden sm:inline">Таблица</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-4">
+        <div id="calendarView" class="space-y-3"></div>
+        <div id="tableView" class="hidden"></div>
+    </main>
+
+    <!-- Stats Footer -->
+    <footer class="max-w-7xl mx-auto px-4 py-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" id="statsGrid"></div>
+    </footer>
+
+    <script>
+        // =====================================================
+        // DATA - из VBA кода
+        // =====================================================
+        const techItems = [
+            // ГРУППА 1
+            { name: "К1-2", desc: "Колонна", qty: 1, totalWeight: 351.7, group: 1 },
+            { name: "К1-3", desc: "Колонна", qty: 1, totalWeight: 351.7, group: 1 },
+            { name: "К1-4", desc: "Колонна", qty: 6, totalWeight: 2166.6, group: 1 },
+            { name: "К1-5", desc: "Колонна", qty: 6, totalWeight: 2166.6, group: 1 },
+            { name: "К3-1", desc: "Колонна", qty: 10, totalWeight: 2988, group: 1 },
+            { name: "Р1-2", desc: "Балка", qty: 1, totalWeight: 796.8, group: 1 },
+            { name: "Р1-12", desc: "Балка", qty: 3, totalWeight: 2390.4, group: 1 },
+            { name: "Р1-14", desc: "Балка", qty: 1, totalWeight: 795.8, group: 1 },
+            { name: "Р1-16", desc: "Балка", qty: 1, totalWeight: 810.6, group: 1 },
+            // ГРУППА 2
+            { name: "Б1-1", desc: "Балка", qty: 12, totalWeight: 464.4, group: 2 },
+            { name: "К3-1(п)", desc: "Колонна", qty: 18, totalWeight: 5378.4, group: 2 },
+            { name: "К3-2", desc: "Колонна", qty: 5, totalWeight: 1093, group: 2 },
+            { name: "Р1-2(п)", desc: "Балка", qty: 2, totalWeight: 1593.6, group: 2 },
+            { name: "Р1-18", desc: "Балка", qty: 1, totalWeight: 796.8, group: 2 },
+            { name: "Р1-19", desc: "Балка", qty: 3, totalWeight: 2390.4, group: 2 },
+            { name: "Р1-20", desc: "Балка", qty: 1, totalWeight: 810.6, group: 2 },
+            { name: "СГ1-9", desc: "Связь", qty: 3, totalWeight: 190.5, group: 2 },
+            { name: "СГ1-14", desc: "Связь", qty: 6, totalWeight: 163.8, group: 2 },
+            { name: "СГ1-16", desc: "Связь", qty: 3, totalWeight: 190.8, group: 2 },
+            { name: "СГ1-18", desc: "Связь", qty: 3, totalWeight: 191.7, group: 2 },
+            { name: "СГ1-19", desc: "Связь", qty: 3, totalWeight: 190.5, group: 2 },
+            { name: "СГ1-20", desc: "Связь", qty: 3, totalWeight: 188.1, group: 2 },
+            { name: "СГ1-21", desc: "Связь", qty: 3, totalWeight: 189.6, group: 2 },
+            { name: "СГ1-26", desc: "Связь", qty: 3, totalWeight: 188.1, group: 2 },
+            // ГРУППА 3
+            { name: "Б1-1(п)", desc: "Балка", qty: 12, totalWeight: 464.4, group: 3 },
+            { name: "К3-3", desc: "Колонна", qty: 5, totalWeight: 1093, group: 3 },
+            { name: "К3-15", desc: "Колонна", qty: 12, totalWeight: 3656.4, group: 3 },
+            { name: "К4-1", desc: "Колонна", qty: 2, totalWeight: 430.4, group: 3 },
+            { name: "Р1-6", desc: "Балка", qty: 6, totalWeight: 2898.6, group: 3 },
+            { name: "Р2-1", desc: "Балка", qty: 2, totalWeight: 617.2, group: 3 },
+            { name: "Р2-2", desc: "Балка", qty: 1, totalWeight: 617.1, group: 3 },
+            { name: "Р2-4", desc: "Балка", qty: 2, totalWeight: 615.6, group: 3 },
+            { name: "Р2-7", desc: "Балка", qty: 1, totalWeight: 388.9, group: 3 },
+            { name: "Р2-8", desc: "Балка", qty: 1, totalWeight: 388.9, group: 3 },
+            { name: "СВ1-8", desc: "Связь", qty: 3, totalWeight: 204.9, group: 3 },
+            { name: "СГ1-13", desc: "Связь", qty: 24, totalWeight: 664.8, group: 3 },
+            // ГРУППА 4
+            { name: "Б1-1(п)", desc: "Балка", qty: 20, totalWeight: 774, group: 4 },
+            { name: "Р1-1", desc: "Балка", qty: 20, totalWeight: 9290, group: 4 },
+            { name: "РП1-2", desc: "Связь", qty: 12, totalWeight: 799.2, group: 4 },
+            { name: "СВ1-4", desc: "Связь", qty: 6, totalWeight: 153.6, group: 4 },
+            { name: "СВ1-5", desc: "Связь", qty: 6, totalWeight: 155.4, group: 4 },
+            { name: "СВ1-6", desc: "Связь", qty: 6, totalWeight: 182.4, group: 4 },
+            { name: "СВ1-7", desc: "Связь", qty: 6, totalWeight: 202.8, group: 4 },
+            // ГРУППА 5
+            { name: "Р1-1(п)", desc: "Балка", qty: 8, totalWeight: 3716, group: 5 },
+            { name: "Р1-3", desc: "Балка", qty: 9, totalWeight: 6921.9, group: 5 },
+            { name: "РП1-5", desc: "Связь", qty: 12, totalWeight: 828, group: 5 },
+            { name: "СВ1-8(п)", desc: "Связь", qty: 3, totalWeight: 204.9, group: 5 },
+            { name: "Ф-3", desc: "Фахверк", qty: 2, totalWeight: 132.8, group: 5 },
+            { name: "Ф-4", desc: "Фахверк", qty: 4, totalWeight: 239.2, group: 5 },
+            // ГРУППА 6
+            { name: "Р1-3(п)", desc: "Балка", qty: 14, totalWeight: 10767.4, group: 6 },
+            { name: "СВ1-9", desc: "Связь", qty: 6, totalWeight: 204.6, group: 6 },
+            { name: "СВ1-10", desc: "Связь", qty: 6, totalWeight: 182.4, group: 6 },
+            { name: "СВ1-12", desc: "Связь", qty: 6, totalWeight: 362.4, group: 6 },
+            { name: "СГ1-1", desc: "Связь", qty: 6, totalWeight: 165.6, group: 6 },
+            { name: "СГ1-8", desc: "Связь", qty: 12, totalWeight: 322.8, group: 6 },
+            // ГРУППА 7
+            { name: "Р1-3(п)", desc: "Балка", qty: 5, totalWeight: 3845.5, group: 7 },
+            { name: "Р1-7", desc: "Балка", qty: 6, totalWeight: 2898.6, group: 7 },
+            { name: "Р1-10", desc: "Балка", qty: 3, totalWeight: 2400, group: 7 },
+            { name: "Р1-11", desc: "Балка", qty: 1, totalWeight: 795.8, group: 7 },
+            { name: "СГ1-2", desc: "Связь", qty: 6, totalWeight: 163.2, group: 7 },
+            { name: "СГ1-3", desc: "Связь", qty: 3, totalWeight: 189.3, group: 7 },
+            { name: "СГ1-5", desc: "Связь", qty: 3, totalWeight: 191.7, group: 7 },
+            { name: "СГ1-7", desc: "Связь", qty: 6, totalWeight: 164.4, group: 7 },
+            { name: "СГ1-10", desc: "Связь", qty: 18, totalWeight: 495, group: 7 },
+            { name: "СГ1-11", desc: "Связь", qty: 15, totalWeight: 414, group: 7 },
+            // ГРУППА 8
+            { name: "Б-1", desc: "Балка", qty: 1, totalWeight: 38.8, group: 8 },
+            { name: "Б-2", desc: "Балка", qty: 1, totalWeight: 38.8, group: 8 },
+            { name: "Б-3", desc: "Балка", qty: 2, totalWeight: 192.6, group: 8 },
+            { name: "К1-1", desc: "Колонна", qty: 10, totalWeight: 3494, group: 8 },
+            { name: "Р1-4", desc: "Балка", qty: 12, totalWeight: 9318, group: 8 },
+            { name: "СГ1-24", desc: "Связь", qty: 3, totalWeight: 190.5, group: 8 },
+            // ГРУППА 9
+            { name: "К1-1(п)", desc: "Колонна", qty: 16, totalWeight: 5590.4, group: 9 },
+            { name: "Р1-5", desc: "Балка", qty: 12, totalWeight: 9318, group: 9 },
+            { name: "РП1-3", desc: "Связь", qty: 3, totalWeight: 201.9, group: 9 },
+            { name: "РП1-4", desc: "Связь", qty: 6, totalWeight: 404.4, group: 9 },
+            // ГРУППА 10
+            { name: "К3-8", desc: "Колонна", qty: 26, totalWeight: 5530.2, group: 10 },
+            { name: "Р1-8", desc: "Балка", qty: 2, totalWeight: 1621.2, group: 10 },
+            { name: "Р1-9", desc: "Балка", qty: 2, totalWeight: 1593.6, group: 10 },
+            { name: "РП1-1", desc: "Связь", qty: 30, totalWeight: 2022, group: 10 },
+            { name: "РП2-1", desc: "Распорка", qty: 4, totalWeight: 263.2, group: 10 },
+            { name: "РП2-2", desc: "Распорка", qty: 4, totalWeight: 143.6, group: 10 },
+            { name: "РП2-3", desc: "Распорка", qty: 4, totalWeight: 208, group: 10 },
+            { name: "РП2-4", desc: "Распорка", qty: 4, totalWeight: 180, group: 10 },
+            { name: "РП2-5", desc: "Распорка", qty: 2, totalWeight: 118.8, group: 10 },
+            // ГРУППА 11
+            { name: "К2-1", desc: "Колонна", qty: 1, totalWeight: 226.8, group: 11 },
+            { name: "К2-2", desc: "Колонна", qty: 1, totalWeight: 204.6, group: 11 },
+            { name: "К2-3", desc: "Колонна", qty: 1, totalWeight: 204.6, group: 11 },
+            { name: "К2-4", desc: "Колонна", qty: 1, totalWeight: 226.8, group: 11 },
+            { name: "К4-2", desc: "Колонна", qty: 1, totalWeight: 221.1, group: 11 },
+            { name: "К4-3", desc: "Колонна", qty: 1, totalWeight: 221.1, group: 11 },
+            { name: "Р1-13", desc: "Балка", qty: 2, totalWeight: 1621.2, group: 11 },
+            { name: "Р1-15", desc: "Балка", qty: 3, totalWeight: 2400.6, group: 11 },
+            { name: "Р1-25", desc: "Балка", qty: 1, totalWeight: 795.8, group: 11 },
+            { name: "Р1-26", desc: "Балка", qty: 1, totalWeight: 795.8, group: 11 },
+            { name: "Р2-3", desc: "Балка", qty: 2, totalWeight: 615.6, group: 11 },
+            { name: "Р2-5", desc: "Балка", qty: 1, totalWeight: 388.9, group: 11 },
+            { name: "Р2-6", desc: "Балка", qty: 1, totalWeight: 388.9, group: 11 },
+            { name: "СВ1-1", desc: "Связь", qty: 4, totalWeight: 194, group: 11 },
+            { name: "СВ1-2", desc: "Связь", qty: 4, totalWeight: 82, group: 11 },
+            { name: "СВ1-3", desc: "Связь", qty: 4, totalWeight: 82, group: 11 },
+            { name: "СВ1-11", desc: "Связь", qty: 6, totalWeight: 448.2, group: 11 },
+            { name: "СГ1-4", desc: "Связь", qty: 3, totalWeight: 190.8, group: 11 },
+            { name: "СГ1-6", desc: "Связь", qty: 3, totalWeight: 83.1, group: 11 },
+            { name: "СГ1-15", desc: "Связь", qty: 3, totalWeight: 189.6, group: 11 },
+            { name: "СГ1-17", desc: "Связь", qty: 3, totalWeight: 189.3, group: 11 },
+            { name: "СГ1-22", desc: "Связь", qty: 3, totalWeight: 190.5, group: 11 },
+            { name: "СГ1-23", desc: "Связь", qty: 3, totalWeight: 190.5, group: 11 },
+            { name: "СГ1-25", desc: "Связь", qty: 3, totalWeight: 190.5, group: 11 },
+            // ГРУППА 12
+            { name: "Ф-1", desc: "Фахверк", qty: 4, totalWeight: 183.2, group: 12 },
+            { name: "Ф-2", desc: "Фахверк", qty: 4, totalWeight: 208.8, group: 12 },
+            { name: "ФС1-1", desc: "Стойка", qty: 2, totalWeight: 313.4, group: 12 },
+            { name: "ФС1-2", desc: "Стойка", qty: 2, totalWeight: 312.2, group: 12 },
+            { name: "ФС1-3", desc: "Стойка", qty: 2, totalWeight: 379.4, group: 12 },
+            { name: "ФС1-4", desc: "Стойка", qty: 2, totalWeight: 379.4, group: 12 },
+            { name: "ФС1-5", desc: "Стойка", qty: 2, totalWeight: 423.2, group: 12 },
+            { name: "ФС1-6", desc: "Стойка", qty: 2, totalWeight: 423.2, group: 12 },
+            { name: "ФС1-7", desc: "Стойка", qty: 2, totalWeight: 537, group: 12 },
+            { name: "ФС1-8", desc: "Стойка", qty: 2, totalWeight: 537, group: 12 },
+            { name: "ФС2-1", desc: "Стойка", qty: 2, totalWeight: 960.4, group: 12 },
+            { name: "ФС2-2", desc: "Стойка", qty: 2, totalWeight: 965.8, group: 12 },
+            { name: "ФС2-3", desc: "Стойка", qty: 2, totalWeight: 1061.8, group: 12 },
+            { name: "ФС2-4", desc: "Стойка", qty: 2, totalWeight: 1056.4, group: 12 }
+        ];
+
+        // Добавляем unitWeight
+        techItems.forEach(item => {
+            item.unitWeight = item.qty > 0 ? item.totalWeight / item.qty : 0;
+            item.remainingQty = item.qty;
+        });
+
+        let startDate = new Date(2025, 10, 27); // 27 ноября 2025
+        const MAX_WEIGHT = 6300; // кг
+        const MIN_WEIGHT = 6000; // кг
+
+        // =====================================================
+        // АЛГОРИТМ НАРЕЗКИ
+        // =====================================================
+        function calculateSchedule() {
+            const items = JSON.parse(JSON.stringify(techItems));
+            items.forEach(item => item.remainingQty = item.qty);
+
+            const days = [];
+            let currentDay = { items: [], weight: 0, qty: 0 };
+
+            for (const item of items) {
+                while (item.remainingQty > 0) {
+                    const spaceLeft = MAX_WEIGHT - currentDay.weight;
+
+                    // Переход дня если заполнен
+                    if (currentDay.weight >= MIN_WEIGHT) {
+                        days.push(currentDay);
+                        currentDay = { items: [], weight: 0, qty: 0 };
+                        continue;
+                    }
+
+                    let piecesToAdd = Math.floor(spaceLeft / item.unitWeight);
+
+                    if (piecesToAdd === 0) {
+                        if (currentDay.weight === 0) {
+                            piecesToAdd = 1;
+                        } else {
+                            days.push(currentDay);
+                            currentDay = { items: [], weight: 0, qty: 0 };
+                            continue;
+                        }
+                    }
+
+                    piecesToAdd = Math.min(piecesToAdd, item.remainingQty);
+
+                    currentDay.items.push({
+                        name: item.name,
+                        desc: item.desc,
+                        pieces: piecesToAdd,
+                        weight: piecesToAdd * item.unitWeight,
+                        group: item.group
+                    });
+                    currentDay.weight += piecesToAdd * item.unitWeight;
+                    currentDay.qty += piecesToAdd;
+                    item.remainingQty -= piecesToAdd;
+                }
+            }
+
+            if (currentDay.items.length > 0) {
+                days.push(currentDay);
+            }
+
+            return days;
+        }
+
+        const schedule = calculateSchedule();
+
+        // =====================================================
+        // ОТОБРАЖЕНИЕ
+        // =====================================================
+        function formatDate(date) {
+            const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+            return {
+                day: days[date.getDay()],
+                date: date.getDate(),
+                month: months[date.getMonth()],
+                full: `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
+            };
+        }
+
+        function getItemClass(desc) {
+            const classes = {
+                'Колонна': 'item-column',
+                'Балка': 'item-beam',
+                'Связь': 'item-link',
+                'Фахверк': 'item-frame',
+                'Стойка': 'item-strut',
+                'Распорка': 'item-spacer'
+            };
+            return classes[desc] || '';
+        }
+
+        function getStatus(weight) {
+            const w = weight / 1000;
+            if (w > 6.5) return { text: 'ПРЕВЫШЕНИЕ', class: 'status-over', icon: '⚠️' };
+            if (w >= 5.9) return { text: 'НОРМА', class: 'status-ok', icon: '✓' };
+            return { text: 'НЕДОГРУЗ', class: 'status-under', icon: '↓' };
+        }
+
+        function renderItems(items, filter = '', typeFilter = '') {
+            return items
+                .filter(item => {
+                    const matchName = !filter || item.name.toLowerCase().includes(filter.toLowerCase());
+                    const matchType = !typeFilter || item.desc === typeFilter;
+                    return matchName && matchType;
+                })
+                .map(item => 
+                    `<span class="item-tag ${getItemClass(item.desc)}" title="${item.desc}: ${item.weight.toFixed(1)} кг">
+                        ${item.name} <b>(${item.pieces})</b>
+                    </span>`
+                ).join('');
+        }
+
+        function hasMatchingItems(items, filter, typeFilter) {
+            if (!items || !items.length) return false;
+            return items.some(item => {
+                const matchName = !filter || item.name.toLowerCase().includes(filter.toLowerCase());
+                const matchType = !typeFilter || item.desc === typeFilter;
+                return matchName && matchType;
+            });
+        }
+
+        function renderCalendar(filter = '', typeFilter = '') {
+            const container = document.getElementById('calendarView');
+            let html = '';
+
+            const totalDays = schedule.length + 1; // +1 для финального дня
+            const hasFilter = filter || typeFilter;
+
+            for (let i = 0; i < totalDays; i++) {
+                const date = new Date(startDate);
+                date.setDate(date.getDate() + i);
+                const df = formatDate(date);
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+                const prepDay = schedule[i];
+                const assemblyDay = i > 0 ? schedule[i - 1] : null;
+                const outputDay = i > 1 ? schedule[i - 2] : null;
+
+                // Если есть фильтр — пропускаем дни без совпадений
+                if (hasFilter) {
+                    const hasPrep = hasMatchingItems(prepDay?.items, filter, typeFilter);
+                    const hasAssembly = hasMatchingItems(assemblyDay?.items, filter, typeFilter);
+                    const hasOutput = hasMatchingItems(outputDay?.items, filter, typeFilter);
+                    if (!hasPrep && !hasAssembly && !hasOutput) continue;
+                }
+
+                const status = prepDay ? getStatus(prepDay.weight) : null;
+                const isFinalDay = i === schedule.length;
+
+                html += `
+                <div class="day-row bg-white rounded-xl card-shadow overflow-hidden animate-row" style="animation-delay: ${i * 50}ms">
+                    <!-- Mobile: Stacked Layout, Desktop: Horizontal -->
+                    <div class="flex flex-col md:flex-row">
+                        <!-- Date Column + Status (Mobile: inline header) -->
+                        <div class="flex md:contents">
+                            <div class="w-20 md:w-24 flex-shrink-0 p-2 md:p-3 ${isWeekend ? 'bg-red-50' : 'bg-gray-50'} border-r flex flex-col items-center justify-center">
+                                <div class="text-xs ${isWeekend ? 'text-red-500' : 'text-gray-500'} font-medium">${df.day}</div>
+                                <div class="text-xl md:text-2xl font-bold ${isWeekend ? 'text-red-600' : 'text-gray-800'}">${df.date}</div>
+                                <div class="text-xs text-gray-500">${df.month}</div>
+                                <div class="mt-1 text-xs font-medium text-blue-600">День ${i + 1}</div>
+                            </div>
+                            
+                            <!-- Mobile Status (visible only on mobile) -->
+                            <div class="flex-1 md:hidden p-2 flex items-center justify-between ${isWeekend ? 'bg-red-50' : 'bg-gray-50'}">
+                                ${status ? `
+                                    <div class="flex items-center gap-2">
+                                        <div class="text-base font-bold">${(prepDay.weight/1000).toFixed(2)} т</div>
+                                        <span class="px-2 py-0.5 rounded-full text-xs text-white font-medium ${status.class}">
+                                            ${status.text}
+                                        </span>
+                                    </div>
+                                    <div class="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div class="h-full ${status.class} rounded-full" style="width: ${Math.min(100, (prepDay.weight / MAX_WEIGHT) * 100)}%"></div>
+                                    </div>
+                                ` : `
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-lg">🏁</span>
+                                        <span class="text-sm font-medium text-gray-600">ФИНАЛ</span>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0">
+                            <!-- Заготовка -->
+                            <div class="p-2 md:p-3 ${prepDay ? 'stage-prep' : 'bg-gray-50'} border-t md:border-t-0">
+                                <div class="flex items-center gap-2 mb-1 md:mb-2">
+                                    <span class="text-base md:text-lg">🔧</span>
+                                    <span class="text-xs md:text-sm font-semibold text-sky-800">ЗАГОТОВКА</span>
+                                    ${prepDay ? `<span class="text-xs text-gray-500 ml-auto">${prepDay.qty} шт</span>` : ''}
+                                </div>
+                                ${prepDay ? `
+                                    <div class="max-h-20 md:max-h-24 overflow-y-auto scrollbar-thin">
+                                        ${renderItems(prepDay.items, filter, typeFilter)}
+                                    </div>
+                                ` : '<div class="text-sm text-gray-400">—</div>'}
+                            </div>
+                            
+                            <!-- Сборка -->
+                            <div class="p-2 md:p-3 ${assemblyDay ? 'stage-assembly' : 'bg-gray-50'} border-t md:border-t-0 md:border-l md:border-r">
+                                <div class="flex items-center gap-2 mb-1 md:mb-2">
+                                    <span class="text-base md:text-lg">🔩</span>
+                                    <span class="text-xs md:text-sm font-semibold text-amber-800">СБОРКА</span>
+                                    ${assemblyDay ? `<span class="text-xs text-gray-500 ml-auto">${assemblyDay.qty} шт</span>` : ''}
+                                </div>
+                                ${assemblyDay ? `
+                                    <div class="max-h-20 md:max-h-24 overflow-y-auto scrollbar-thin">
+                                        ${renderItems(assemblyDay.items, filter, typeFilter)}
+                                    </div>
+                                ` : '<div class="text-sm text-gray-400">—</div>'}
+                            </div>
+                            
+                            <!-- Выпуск -->
+                            <div class="p-2 md:p-3 ${outputDay ? 'stage-output' : 'bg-gray-50'} border-t md:border-t-0">
+                                <div class="flex items-center gap-2 mb-1 md:mb-2">
+                                    <span class="text-base md:text-lg">⚡</span>
+                                    <span class="text-xs md:text-sm font-semibold text-green-800">ВЫПУСК</span>
+                                    ${outputDay ? `<span class="text-xs text-gray-500 ml-auto">${outputDay.qty} шт</span>` : ''}
+                                </div>
+                                ${outputDay ? `
+                                    <div class="max-h-20 md:max-h-24 overflow-y-auto scrollbar-thin">
+                                        ${renderItems(outputDay.items, filter, typeFilter)}
+                                    </div>
+                                ` : '<div class="text-sm text-gray-400">—</div>'}
+                            </div>
+                        </div>
+                        
+                        <!-- Desktop Status (hidden on mobile) -->
+                        <div class="hidden md:flex w-24 md:w-32 flex-shrink-0 p-3 border-l flex-col items-center justify-center">
+                            ${status ? `
+                                <div class="w-full h-2 bg-gray-200 rounded-full mb-2 overflow-hidden">
+                                    <div class="h-full ${status.class} rounded-full" style="width: ${Math.min(100, (prepDay.weight / MAX_WEIGHT) * 100)}%"></div>
+                                </div>
+                                <div class="text-lg font-bold">${(prepDay.weight/1000).toFixed(2)}</div>
+                                <div class="text-xs text-gray-500">тонн</div>
+                                <div class="mt-1 px-2 py-1 rounded-full text-xs text-white font-medium ${status.class}">
+                                    ${status.icon} ${status.text}
+                                </div>
+                            ` : `
+                                <div class="text-center">
+                                    <div class="text-2xl mb-1">🏁</div>
+                                    <div class="text-sm font-medium text-gray-600">ФИНАЛ</div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            if (!html && hasFilter) {
+                html = '<div class="bg-white rounded-xl card-shadow p-8 text-center"><div class="text-4xl mb-3">🔍</div><div class="text-gray-500">Ничего не найдено</div></div>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        function renderTable() {
+            const container = document.getElementById('tableView');
+            let totalWeight = 0;
+            let totalQty = 0;
+
+            let html = `
+            <div class="bg-white rounded-xl card-shadow overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-800 text-white">
+                        <tr>
+                            <th class="px-4 py-3 text-left">День</th>
+                            <th class="px-4 py-3 text-left">Дата</th>
+                            <th class="px-4 py-3 text-center">Кол-во</th>
+                            <th class="px-4 py-3 text-center">Вес (т)</th>
+                            <th class="px-4 py-3 text-left">Позиции</th>
+                            <th class="px-4 py-3 text-center">Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            schedule.forEach((day, i) => {
+                const date = new Date(startDate);
+                date.setDate(date.getDate() + i);
+                const df = formatDate(date);
+                const status = getStatus(day.weight);
+                totalWeight += day.weight;
+                totalQty += day.qty;
+
+                html += `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-3 font-medium">${i + 1}</td>
+                        <td class="px-4 py-3">${df.full}</td>
+                        <td class="px-4 py-3 text-center font-medium">${day.qty} шт</td>
+                        <td class="px-4 py-3 text-center font-bold">${(day.weight/1000).toFixed(3)}</td>
+                        <td class="px-4 py-3">
+                            <div class="max-w-md overflow-x-auto">
+                                ${day.items.map(item => `${item.name}(${item.pieces})`).join(', ')}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="px-2 py-1 rounded text-xs text-white ${status.class}">${status.text}</span>
+                        </td>
+                    </tr>`;
+            });
+
+            html += `
+                    </tbody>
+                    <tfoot class="bg-gray-100 font-bold">
+                        <tr>
+                            <td colspan="2" class="px-4 py-3 text-right">ИТОГО:</td>
+                            <td class="px-4 py-3 text-center">${totalQty} шт</td>
+                            <td class="px-4 py-3 text-center">${(totalWeight/1000).toFixed(3)} т</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>`;
+
+            container.innerHTML = html;
+        }
+
+        function updateStats() {
+            const totalWeight = schedule.reduce((sum, day) => sum + day.weight, 0) / 1000;
+            const totalItems = schedule.reduce((sum, day) => sum + day.qty, 0);
+            const totalMarks = techItems.length;
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + schedule.length);
+
+            document.getElementById('totalWeight').textContent = '~' + totalWeight.toFixed(1).replace('.', ',');
+            document.getElementById('totalMarks').textContent = '~' + totalMarks;
+            document.getElementById('totalItems').textContent = '~' + totalItems;
+            document.getElementById('totalDays').textContent = schedule.length;
+            document.getElementById('startDateLabel').textContent = 'Начало: ' + formatDate(startDate).full;
+            document.getElementById('endDateLabel').textContent = 'Завершение: ' + formatDate(endDate).full;
+
+            // Статистика по типам
+            const stats = {};
+            techItems.forEach(item => {
+                if (!stats[item.desc]) stats[item.desc] = { qty: 0, weight: 0 };
+                stats[item.desc].qty += item.qty;
+                stats[item.desc].weight += item.totalWeight;
+            });
+
+            const icons = {
+                'Колонна': '🏛️',
+                'Балка': '📏',
+                'Связь': '🔗',
+                'Фахверк': '🏗️',
+                'Стойка': '📍',
+                'Распорка': '⚙️'
+            };
+
+            const colors = {
+                'Колонна': 'from-purple-500 to-purple-600',
+                'Балка': 'from-blue-500 to-blue-600',
+                'Связь': 'from-amber-500 to-amber-600',
+                'Фахверк': 'from-pink-500 to-pink-600',
+                'Стойка': 'from-green-500 to-green-600',
+                'Распорка': 'from-red-500 to-red-600'
+            };
+
+            let statsHtml = '';
+            for (const [type, data] of Object.entries(stats)) {
+                statsHtml += `
+                <div class="bg-gradient-to-br ${colors[type] || 'from-gray-500 to-gray-600'} rounded-xl p-4 text-white card-shadow">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-2xl">${icons[type] || '📦'}</span>
+                        <span class="font-semibold">${type}</span>
+                    </div>
+                    <div class="text-2xl font-bold">${data.qty} шт</div>
+                    <div class="text-sm opacity-80">${(data.weight/1000).toFixed(2)} т</div>
+                </div>`;
+            }
+            document.getElementById('statsGrid').innerHTML = statsHtml;
+
+            // Анимация прогресса
+            setTimeout(() => {
+                document.getElementById('progressBar').style.width = '100%';
+                document.getElementById('progressPercent').textContent = '100%';
+            }, 500);
+        }
+
+        // =====================================================
+        // EVENTS
+        // =====================================================
+        
+        // Обработчик изменения даты начала
+        document.getElementById('startDateInput').addEventListener('change', (e) => {
+            const dateValue = e.target.value;
+            if (dateValue) {
+                const parts = dateValue.split('-');
+                startDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                renderCalendar(document.getElementById('searchInput').value, document.getElementById('filterType').value);
+                renderTable();
+                updateStats();
+            }
+        });
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            renderCalendar(e.target.value, document.getElementById('filterType').value);
+        });
+
+        document.getElementById('filterType').addEventListener('change', (e) => {
+            renderCalendar(document.getElementById('searchInput').value, e.target.value);
+        });
+
+        document.getElementById('viewCalendar').addEventListener('click', () => {
+            document.getElementById('calendarView').classList.remove('hidden');
+            document.getElementById('tableView').classList.add('hidden');
+            document.getElementById('viewCalendar').className = 'px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium';
+            document.getElementById('viewTable').className = 'px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300';
+        });
+
+        document.getElementById('viewTable').addEventListener('click', () => {
+            document.getElementById('calendarView').classList.add('hidden');
+            document.getElementById('tableView').classList.remove('hidden');
+            document.getElementById('viewTable').className = 'px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium';
+            document.getElementById('viewCalendar').className = 'px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300';
+        });
+
+        // Init
+        renderCalendar();
+        renderTable();
+        updateStats();
+    </script>
+</body>
+</html>
